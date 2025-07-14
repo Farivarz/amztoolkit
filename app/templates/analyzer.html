@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h2>FBA Order Form</h2>
+    <p>Enter an ASIN to populate product details, add items to build your shipment, then submit the final order.</p>
+</div>
+
+<!-- This main div now controls the side-by-side layout -->
+<div class="fba-order-layout">
+
+    <!-- Left Column: Input Form -->
+    <div class="form-column">
+        <div class="form-container">
+            <div class="form-section">
+                <h3>Order Information</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="created-on">Created On</label>
+                        <input type="text" id="created-on" name="created-on" class="form-control" value="{{ data.creation_date }}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="created-by">Created By</label>
+                        <input type="text" id="created-by" name="created-by" class="form-control" value="{{ data.user_name }}" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Add Product to Shipment</h3>
+                <div class="form-group">
+                    <label for="asin">ASIN</label>
+                    <div class="input-group">
+                        <input type="text" id="asin" class="form-control" placeholder="Enter product ASIN...">
+                        <button type="button" id="check-asin-btn" class="btn">Check</button>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="sku">SKU</label>
+                        <input type="text" id="sku" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="ean">EAN</label>
+                        <input type="text" id="ean" class="form-control" readonly>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="product-name">Product Name</label>
+                    <input type="text" id="product-name" class="form-control" readonly>
+                </div>
+                 <div class="form-group">
+                    <label for="quantity">Recommended Quantity</label>
+                    <input type="number" id="quantity" class="form-control" placeholder="Enter quantity to ship">
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="add-to-shipment-btn" class="submit-btn">Add to Shipment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Shipment Table and Summary -->
+    <div class="table-column">
+        <div class="table-container">
+            <h3>Shipment Items</h3>
+            <form action="{{ url_for('submit_fba_order') }}" method="post" id="shipment-form">
+                <div class="shipment-table-wrapper">
+                    <table class="shipment-table">
+                        <thead>
+                            <tr>
+                                <th>ASIN</th>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Qty</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="shipment-table-body">
+                            <tr id="shipment-placeholder">
+                                <td colspan="5" class="placeholder-cell">Your shipment items will appear here.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Summary and Submit Button moved inside the right column -->
+                <div class="shipment-summary-bar">
+                    <div class="summary-text">
+                        <span id="summary-item-count">0</span> items | Total quantity: <span id="summary-total-quantity">0</span>
+                    </div>
+                    <button type="submit" class="submit-btn final-submit-btn">Submit Final Shipment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Input fields
+    const asinInput = document.getElementById('asin');
+    const checkBtn = document.getElementById('check-asin-btn');
+    const skuInput = document.getElementById('sku');
+    const eanInput = document.getElementById('ean');
+    const productNameInput = document.getElementById('product-name');
+    const quantityInput = document.getElementById('quantity');
+    const addBtn = document.getElementById('add-to-shipment-btn');
+    const tableBody = document.getElementById('shipment-table-body');
+
+    // Summary elements
+    const summaryItemCount = document.getElementById('summary-item-count');
+    const summaryTotalQuantity = document.getElementById('summary-total-quantity');
+
+    function fetchProductDetails() {
+        const asin = asinInput.value.trim();
+        if (asin.length >= 10) {
+            fetch(`/api/get_product_details?asin=${asin}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error fetching product details:', data.error);
+                        skuInput.value = 'Not Found';
+                        eanInput.value = 'Not Found';
+                        productNameInput.value = 'Not Found';
+                    } else {
+                        skuInput.value = data.sku;
+                        eanInput.value = data.ean;
+                        productNameInput.value = data.product_name;
+                    }
+                })
+                .catch(error => console.error('Fetch error:', error));
+        }
+    }
+
+    function updateSummary() {
+        const rows = tableBody.querySelectorAll('tr:not(#shipment-placeholder)');
+        let totalItems = rows.length;
+        let totalQuantity = 0;
+        rows.forEach(row => {
+            const qty = parseInt(row.querySelector('input[name="quantity"]').value, 10);
+            totalQuantity += qty;
+        });
+        summaryItemCount.textContent = totalItems;
+        summaryTotalQuantity.textContent = totalQuantity;
+    }
+
+    function addRowToTable() {
+        const asin = asinInput.value.trim();
+        const sku = skuInput.value.trim();
+        const productName = productNameInput.value.trim();
+        const quantity = quantityInput.value.trim();
+
+        if (!asin || !sku || !productName || !quantity || parseInt(quantity) <= 0 || sku === 'Not Found') {
+            alert('Please check the ASIN and enter a valid quantity before adding to the shipment.');
+            return;
+        }
+        
+        const placeholder = document.getElementById('shipment-placeholder');
+        if (placeholder) {
+            placeholder.remove();
+        }
+
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td><input type="hidden" name="asin" value="${asin}">${asin}</td>
+            <td><input type="hidden" name="sku" value="${sku}">${sku}</td>
+            <td><input type="hidden" name="product_name" value="${productName}">${productName}</td>
+            <td><input type="hidden" name="quantity" value="${quantity}">${quantity}</td>
+            <td><button type="button" class="remove-row-btn">&times;</button></td>
+        `;
+        tableBody.appendChild(newRow);
+
+        asinInput.value = '';
+        skuInput.value = '';
+        eanInput.value = '';
+        productNameInput.value = '';
+        quantityInput.value = '';
+        asinInput.focus();
+        updateSummary();
+    }
+
+    function removeRow(e) {
+        if (e.target.classList.contains('remove-row-btn')) {
+            e.target.closest('tr').remove();
+            
+            if (tableBody.children.length === 0) {
+                const placeholderRow = document.createElement('tr');
+                placeholderRow.id = 'shipment-placeholder';
+                placeholderRow.innerHTML = `<td colspan="5" class="placeholder-cell">Your shipment items will appear here.</td>`;
+                tableBody.appendChild(placeholderRow);
+            }
+            updateSummary();
+        }
+    }
+
+    checkBtn.addEventListener('click', fetchProductDetails);
+    addBtn.addEventListener('click', addRowToTable);
+    tableBody.addEventListener('click', removeRow);
+});
+</script>
+{% endblock %}

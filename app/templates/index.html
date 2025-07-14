@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="analyzer-container">
+    <div class="sidebar-analyzer">
+        <h2>FBM Analyzer</h2>
+        <p>This tool analyzes and compares FBM stock levels between Amazon and ASPoint.</p>
+        <div id="summary-report" style="display:none;">
+            <!-- Summary report will be injected here by JavaScript -->
+        </div>
+        <a href="{{ url_for('download_fbm_report') }}" class="download-btn" id="download-container" style="display:none;">Download as Excel</a>
+    </div>
+
+    <div class="content-analyzer">
+        <div id="loading" class="loading-screen">
+            <div class="loader"></div>
+            <h2>Reading Files...</h2>
+            <p id="status-message">Please wait while we process your data.</p>
+            <p id="counter"></p>
+        </div>
+        <div id="results" class="results-screen" style="display:none;">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Base SKU / Item Name</th>
+                        <th>Variations</th>
+                        <th>EAN</th>
+                        <th>Amazon FBM Qty</th>
+                        <th>ASPoint Stock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="results-table-body">
+                    <!-- Data will be injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // This script is specific to the analyzer page.
+    document.addEventListener("DOMContentLoaded", function() {
+        const statusMessage = document.getElementById('status-message');
+        const counter = document.getElementById('counter');
+        const loadingScreen = document.getElementById('loading');
+        const resultsScreen = document.getElementById('results');
+        const tableBody = document.getElementById('results-table-body');
+        const downloadContainer = document.getElementById('download-container');
+        const summaryReport = document.getElementById('summary-report');
+
+        function setupFilters() {
+            const filterControls = document.querySelector('.filter-controls');
+            if (!filterControls) return;
+
+            const tableRows = tableBody.querySelectorAll('tr');
+
+            filterControls.addEventListener('click', function(e) {
+                if (e.target.tagName !== 'BUTTON') return;
+
+                const filterValue = e.target.dataset.filter;
+
+                filterControls.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                e.target.classList.add('active');
+
+                tableRows.forEach(row => {
+                    if (filterValue === 'all' || row.dataset.status === filterValue) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        statusMessage.textContent = 'Files read successfully. Starting analysis...';
+        
+        fetch("{{ url_for('process_data') }}")
+            .then(response => response.json())
+            .then(result => {
+                if (result.error) {
+                    statusMessage.textContent = `Error: ${result.error}`;
+                    counter.textContent = '';
+                    document.querySelector('.loader').style.display = 'none';
+                    return;
+                }
+                
+                counter.textContent = `Found ${result.count} FBM products to analyze.`;
+                
+                let tableHtml = '';
+                result.data.forEach(item => {
+                    const fbm_class = item.FBM_Status.replace(/ /g, '');
+                    tableHtml += `
+                        <tr data-status="${fbm_class}">
+                            <td class="sku-main-cell">${item.BaseSKU}<span>${item.ItemName}</span></td>
+                            <td>${item.SKU_Variations}</td>
+                            <td>${item.EAN}</td>
+                            <td>${item.FBM_Qty}</td>
+                            <td>${item.ASPoint_Stock}</td>
+                            <td><span class="status-badge status-${fbm_class}">${item.FBM_Status}</span></td>
+                        </tr>
+                    `;
+                });
+
+                let summaryHtml = '<div class="summary-card">';
+                summaryHtml += `<h3>FBM Summary</h3><ul>`;
+                const fbmSummary = result.summary.fbm;
+                for(const [status, count] of Object.entries(fbmSummary)) {
+                    summaryHtml += `<li><span>${status}</span><span>${count}</span></li>`;
+                }
+                summaryHtml += `</ul>`;
+
+                summaryHtml += `<div class="filter-controls"><button class="filter-btn active" data-filter="all">All</button>`;
+                for(const status of Object.keys(fbmSummary)) {
+                    const statusClass = status.replace(/ /g, '');
+                    summaryHtml += `<button class="filter-btn" data-filter="${statusClass}">${status}</button>`;
+                }
+                summaryHtml += `</div>`;
+                summaryHtml += `</div>`;
+
+                tableBody.innerHTML = tableHtml;
+                summaryReport.innerHTML = summaryHtml;
+                loadingScreen.style.display = 'none';
+                resultsScreen.style.display = 'block';
+                downloadContainer.style.display = 'block';
+                summaryReport.style.display = 'block';
+
+                setupFilters();
+            })
+            .catch(error => {
+                statusMessage.textContent = `A client-side error occurred: ${error}`;
+            });
+    });
+</script>
+{% endblock %}

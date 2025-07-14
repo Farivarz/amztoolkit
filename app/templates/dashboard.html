@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <div class="status-bar">
+        <div class="status-item">
+            <span>Amazon Reference Database:</span>
+            <strong class="status-ok">{{ data.amazon_status }}</strong>
+            <span>, Last Update: {{ data.amazon_last_update }}</span>
+        </div>
+        <div class="status-item">
+            <span>ASPoint Reference Database:</span>
+            <strong class="status-ok">{{ data.asdata_status }}</strong>
+            <span>, Last Update: {{ data.asdata_last_update }}</span>
+        </div>
+    </div>
+    <div class="date-time">
+        {{ data.current_time }}
+    </div>
+</div>
+
+<div class="dashboard-cards">
+    <div class="card">
+        <h3>Total Amazon Products</h3>
+        <p class="card-value">{{ data.amazon_total_products }}</p>
+    </div>
+    <div class="card">
+        <h3>Total Products in ASPoint</h3>
+        <p class="card-value">{{ data.asdata_total_products }}</p>
+    </div>
+    <div class="card placeholder">
+        <!-- Placeholder for future content -->
+    </div>
+</div>
+
+<div class="system-health">
+    <h3>System Health Checker</h3>
+    <div class="health-content">
+        <!-- Health checker content will go here -->
+        <button class="health-check-btn">Run System Check</button>
+    </div>
+</div>
+{% endblock %}
